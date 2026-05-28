@@ -1,8 +1,18 @@
+// jpeg-js uses Buffer to allocate its output array; shim it with Uint8Array
+if (typeof Buffer === 'undefined') {
+  Buffer = function(size) { return new Uint8Array(size); };
+}
+
 var Clay = require('@rebble/clay');
 var clayConfig = require('./config');
 new Clay(clayConfig);
 
+var jpegjs = require('jpeg-js');
+
 const POLL_INTERVAL_MS = 10000;
+const CAMERA_W = 120;
+const CAMERA_H = 120;
+const CHUNK_SIZE = 800;
 
 var pollTimer = null;
 
@@ -10,9 +20,9 @@ function getMoonrakerUrl() {
   var settings = localStorage.getItem('clay-settings');
   if (settings) {
     try {
-      var settings = JSON.parse(settings);
-      if (settings.MoonrakerUrl) {
-        return settings.MoonrakerUrl;
+      var parsed = JSON.parse(settings);
+      if (parsed.MoonrakerUrl) {
+        return parsed.MoonrakerUrl;
       }
     } catch (e) {}
   }
@@ -42,7 +52,6 @@ function fetchPrinterStatus() {
       var printState = status.print_stats.state || 'unknown';
       var progress = Math.round(status.virtual_sdcard.progress * 100);
 
-      // Estimate time remaining from progress and elapsed duration
       var printDuration = status.print_stats.print_duration || 0;
       var timeLeft = 0;
       if (progress > 0 && printState === 'printing') {
@@ -50,20 +59,18 @@ function fetchPrinterStatus() {
         timeLeft = Math.round(totalEstimate - printDuration);
       }
 
-      var dict = {
-        NozzleTemp: nozzleTemp,
-        NozzleTarget: nozzleTarget,
-        BedTemp: bedTemp,
-        BedTarget: bedTarget,
-        PrintState: printState,
-        PrintProgress: progress,
-        PrintTimeLeft: timeLeft,
-      };
-
       Pebble.sendAppMessage(
-        dict,
+        {
+          NozzleTemp: nozzleTemp,
+          NozzleTarget: nozzleTarget,
+          BedTemp: bedTemp,
+          BedTarget: bedTarget,
+          PrintState: printState,
+          PrintProgress: progress,
+          PrintTimeLeft: timeLeft,
+        },
         function () {
-          console.log('Data sent to watch');
+          console.log('Status sent to watch');
         },
         function (e) {
           console.log('Send failed: ' + JSON.stringify(e));
@@ -76,8 +83,78 @@ function fetchPrinterStatus() {
 
   req.onerror = function () {
     console.log('XHR error - is Moonraker reachable?');
-    // Send an error state so the watch knows
     Pebble.sendAppMessage({ PrintState: 'error' });
+  };
+
+  req.open('GET', url);
+  req.send();
+}
+
+function rgbToGColor8(r, g, b) {
+  var r2 = Math.min(3, Math.round(r / 85));
+  var g2 = Math.min(3, Math.round(g / 85));
+  var b2 = Math.min(3, Math.round(b / 85));
+  return 0xc0 | (r2 << 4) | (g2 << 2) | b2;
+}
+
+function sendCameraChunks(pixels, total, index) {
+  if (index >= total) {
+    console.log('Camera transfer complete');
+    return;
+  }
+  var start = index * CHUNK_SIZE;
+  var chunk = Array.prototype.slice.call(pixels, start, start + CHUNK_SIZE);
+  Pebble.sendAppMessage(
+    {
+      CameraChunkData: chunk,
+      CameraChunkIndex: index,
+      CameraChunkTotal: total,
+    },
+    function () {
+      sendCameraChunks(pixels, total, index + 1);
+    },
+    function (e) {
+      console.log('Chunk ' + index + ' failed: ' + JSON.stringify(e));
+    }
+  );
+}
+
+function fetchCameraSnapshot() {
+  var url = getMoonrakerUrl() + '/webcam/?action=snapshot';
+  console.log('Fetching camera snapshot from ' + url);
+
+  var req = new XMLHttpRequest();
+  req.responseType = 'arraybuffer';
+
+  req.onload = function () {
+    try {
+      var raw = new Uint8Array(this.response);
+      var decoded = jpegjs.decode(raw, { useTArray: true });
+
+      var pixels = new Uint8Array(CAMERA_W * CAMERA_H);
+      for (var y = 0; y < CAMERA_H; y++) {
+        for (var x = 0; x < CAMERA_W; x++) {
+          var srcX = Math.floor((x * decoded.width) / CAMERA_W);
+          var srcY = Math.floor((y * decoded.height) / CAMERA_H);
+          var idx = (srcY * decoded.width + srcX) * 4;
+          pixels[y * CAMERA_W + x] = rgbToGColor8(
+            decoded.data[idx],
+            decoded.data[idx + 1],
+            decoded.data[idx + 2]
+          );
+        }
+      }
+
+      var total = Math.ceil(pixels.length / CHUNK_SIZE);
+      console.log('Sending camera in ' + total + ' chunks');
+      sendCameraChunks(pixels, total, 0);
+    } catch (e) {
+      console.log('Camera decode error: ' + e.message);
+    }
+  };
+
+  req.onerror = function () {
+    console.log('Camera fetch failed');
   };
 
   req.open('GET', url);
@@ -106,5 +183,8 @@ Pebble.addEventListener('appmessage', function (e) {
   if (dict['RequestUpdate']) {
     console.log('Manual refresh requested');
     fetchPrinterStatus();
+  }
+  if (dict['CameraRequest']) {
+    fetchCameraSnapshot();
   }
 });

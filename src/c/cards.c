@@ -4,15 +4,18 @@
 #include "messaging.h"
 #include <pebble.h>
 #include <stdio.h>
+#include <string.h>
 
-#define NUM_CARDS   3
-#define CARD_BED    0
-#define CARD_NOZZLE 1
-#define CARD_PRINT  2
+#define NUM_CARDS    4
+#define CARD_BED     0
+#define CARD_NOZZLE  1
+#define CARD_PRINT   2
+#define CARD_CAMERA  3
 
-#define BG_BED    GColorOxfordBlue
-#define BG_NOZZLE GColorBulgarianRose
-#define BG_PRINT  GColorMidnightGreen
+#define BG_BED     GColorOxfordBlue
+#define BG_NOZZLE  GColorBulgarianRose
+#define BG_PRINT   GColorMidnightGreen
+#define BG_CAMERA  GColorBlack
 
 #define LABEL_TEXT_BED_TEMP "BED TEMP"
 #define LABEL_TEXT_NOZZLE   "NOZZLE"
@@ -55,6 +58,8 @@ static int s_anim_frame = 0;
 
 static int s_icon_area_h = 0;
 
+static GBitmap *s_camera_bitmap = NULL;
+
 static void prv_draw_card_icon(GContext *ctx, int card, GRect bounds) {
   switch (card) {
   case CARD_BED:
@@ -67,19 +72,23 @@ static void prv_draw_card_icon(GContext *ctx, int card, GRect bounds) {
     drawing_draw_print(ctx, bounds, s_anim_frame, messaging_get_print_progress(),
                        messaging_get_print_state());
     break;
+  case CARD_CAMERA:
+    if (s_camera_bitmap) {
+      int bx = (bounds.size.w - CAMERA_W) / 2;
+      int by = (bounds.size.h - CAMERA_H) / 2;
+      graphics_draw_bitmap_in_rect(ctx, s_camera_bitmap, GRect(bx, by, CAMERA_W, CAMERA_H));
+    }
+    break;
   }
 }
 
 static GColor prv_bg_color_for_card(int card) {
   switch (card) {
-  case CARD_BED:
-    return BG_BED;
-  case CARD_NOZZLE:
-    return BG_NOZZLE;
-  case CARD_PRINT:
-    return BG_PRINT;
-  default:
-    return GColorBlack;
+  case CARD_BED:    return BG_BED;
+  case CARD_NOZZLE: return BG_NOZZLE;
+  case CARD_PRINT:  return BG_PRINT;
+  case CARD_CAMERA: return BG_CAMERA;
+  default:          return GColorBlack;
   }
 }
 
@@ -139,6 +148,23 @@ static void prv_update_card_text(void) {
     } else {
       snprintf(s_value_buf, sizeof(s_value_buf), VALUE_TEXT_IDLE);
       snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_READY);
+    }
+    break;
+  case CARD_CAMERA:
+    if (messaging_is_camera_ready()) {
+      if (s_camera_bitmap) gbitmap_destroy(s_camera_bitmap);
+      s_camera_bitmap = gbitmap_create_blank(GSize(CAMERA_W, CAMERA_H), GBitmapFormat8Bit);
+      if (s_camera_bitmap) {
+        memcpy(gbitmap_get_data(s_camera_bitmap), messaging_get_camera_pixels(),
+               CAMERA_W * CAMERA_H);
+      }
+      s_label_buf[0] = '\0';
+      s_value_buf[0] = '\0';
+      s_subtext_buf[0] = '\0';
+    } else {
+      snprintf(s_label_buf, sizeof(s_label_buf), "CAMERA");
+      snprintf(s_value_buf, sizeof(s_value_buf), "Loading...");
+      snprintf(s_subtext_buf, sizeof(s_subtext_buf), "Fetching snapshot");
     }
     break;
   }
@@ -211,7 +237,9 @@ static void prv_canvas_update_proc(Layer *layer, GContext *context) {
   if (s_transition_direction == 0) {
     graphics_context_set_fill_color(context, prv_bg_color_for_card(s_current_card));
     graphics_fill_rect(context, bounds, 0, GCornerNone);
-    bounds.size.h = s_icon_area_h;
+    if (s_current_card != CARD_CAMERA) {
+      bounds.size.h = s_icon_area_h;
+    }
     prv_draw_card_icon(context, s_current_card, bounds);
   } else {
     prv_draw_transition(layer, context);
@@ -231,6 +259,9 @@ static void prv_transition_teardown(Animation *anim) {
   s_current_card += s_transition_direction;
   s_transition_direction = 0;
   s_transition_progress = 0;
+  if (s_current_card == CARD_CAMERA) {
+    messaging_request_camera();
+  }
   prv_update_card_text();
   layer_mark_dirty(s_canvas_layer);
 }
@@ -270,7 +301,18 @@ static void prv_down_click_handler(ClickRecognizerRef recognizer, void *context)
   prv_start_card_transition(-1);
 }
 
+static void prv_select_click_handler(ClickRecognizerRef recognizer, void *context) {
+  if (s_current_card == CARD_CAMERA) {
+    messaging_request_camera();
+    snprintf(s_value_buf, sizeof(s_value_buf), "Loading...");
+    snprintf(s_subtext_buf, sizeof(s_subtext_buf), "Fetching snapshot");
+    text_layer_set_text(s_value_layer, s_value_buf);
+    text_layer_set_text(s_subtext_layer, s_subtext_buf);
+  }
+}
+
 void cards_click_config_provider(void *context) {
+  window_single_click_subscribe(BUTTON_ID_SELECT, prv_select_click_handler);
   window_single_click_subscribe(BUTTON_ID_UP, prv_up_click_handler);
   window_single_click_subscribe(BUTTON_ID_DOWN, prv_down_click_handler);
 }
@@ -325,6 +367,11 @@ void cards_window_load(Window *window) {
 void cards_window_unload(Window *window) {
   app_timer_cancel(s_anim_timer);
   s_anim_timer = NULL;
+
+  if (s_camera_bitmap) {
+    gbitmap_destroy(s_camera_bitmap);
+    s_camera_bitmap = NULL;
+  }
 
   text_layer_destroy(s_label_layer);
   text_layer_destroy(s_value_layer);
