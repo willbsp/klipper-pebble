@@ -4,3 +4,4 @@ __pycache__/
 .cache
 node_modules/
 .clangd
+compile_commands.json
