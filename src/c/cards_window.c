@@ -1,4 +1,4 @@
-#include "cards.h"
+#include "cards_window.h"
 
 #include "drawing.h"
 #include "messaging.h"
@@ -34,6 +34,8 @@
 
 #define CARD_TRANSITION_MS          350
 #define CARD_TRANSITION_WIPE_OFFSET 40
+
+static Window *s_window;
 
 static TextLayer *s_label_layer;
 static TextLayer *s_value_layer;
@@ -270,12 +272,12 @@ static void prv_down_click_handler(ClickRecognizerRef recognizer, void *context)
   prv_start_card_transition(-1);
 }
 
-void cards_click_config_provider(void *context) {
+static void prv_click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_UP, prv_up_click_handler);
   window_single_click_subscribe(BUTTON_ID_DOWN, prv_down_click_handler);
 }
 
-void cards_window_load(Window *window) {
+static void prv_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
@@ -322,7 +324,7 @@ void cards_window_load(Window *window) {
   s_anim_timer = app_timer_register(ANIM_FRAME_MS, prv_anim_timer_callback, NULL);
 }
 
-void cards_window_unload(Window *window) {
+static void prv_window_unload(Window *window) {
   app_timer_cancel(s_anim_timer);
   s_anim_timer = NULL;
 
@@ -331,8 +333,26 @@ void cards_window_unload(Window *window) {
   text_layer_destroy(s_subtext_layer);
   layer_destroy(s_canvas_layer);
   status_bar_layer_destroy(s_status_bar);
+
+  window_destroy(window);
+  s_window = NULL;
 }
 
-void cards_update(void) {
+void cards_window_update(void) {
+  if (!s_window) {
+    return;
+  }
+
   prv_update_card_text();
+}
+
+void cards_window_init() {
+  s_window = window_create();
+  window_set_background_color(s_window, GColorBlack);
+  window_set_click_config_provider(s_window, prv_click_config_provider);
+  window_set_window_handlers(s_window, (WindowHandlers){
+                                           .load = prv_window_load,
+                                           .unload = prv_window_unload,
+                                       });
+  window_stack_push(s_window, true);
 }

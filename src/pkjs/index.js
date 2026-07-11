@@ -2,7 +2,7 @@ var Clay = require('@rebble/clay');
 var clayConfig = require('./config');
 new Clay(clayConfig);
 
-const POLL_INTERVAL_MS = 1000;
+const POLL_INTERVAL_MS = 10000;
 const REQUEST_TIMEOUT_MS = 5000;
 
 const CONN_OK = 1;
@@ -26,9 +26,9 @@ function getMoonrakerUrl() {
   var settings = localStorage.getItem('clay-settings');
   if (settings) {
     try {
-      var settings = JSON.parse(settings);
-      if (settings.MoonrakerUrl) {
-        return settings.MoonrakerUrl;
+      var settingsJson = JSON.parse(settings);
+      if (settingsJson.MoonrakerUrl) {
+        return settingsJson.MoonrakerUrl;
       }
     } catch (e) {}
   }
@@ -91,7 +91,6 @@ function fetchPrinterStatus() {
 
   function unreachable() {
     console.log('Moonraker is unreachable');
-    stopPolling();
     sendToWatch({ ConnectionState: CONN_UNREACHABLE });
   }
 
@@ -143,4 +142,10 @@ Pebble.addEventListener('appmessage', function (e) {
     console.log('Manual refresh requested');
     fetchPrinterStatus();
   }
+});
+
+Pebble.addEventListener('webviewclosed', function () {
+  console.log('Config window closed - restarting polling');
+  stopPolling();
+  startPolling();
 });

@@ -41,6 +41,11 @@
           "name": "IMAGE_MENU_ICON",
           "file": "images/icon.png",
           "menuIcon": true
+        },
+        {
+          "type": "bitmap",
+          "name": "CONFIG_REQUIRED",
+          "file": "images/config-required.png"
         }
       ]
     }
