@@ -24,8 +24,6 @@ static const struct {
                                 RESOURCE_ID_NO_INTERNET},
 };
 
-static AppError s_last_error;
-
 static AppError prv_current_error(void) {
   if (!connection_service_peek_pebble_app_connection()) {
     return APP_ERROR_NO_PHONE;
@@ -41,6 +39,16 @@ static AppError prv_current_error(void) {
   }
 }
 
+static void prv_show_error(AppError error) {
+  static AppError last_error;
+  if (error != last_error) {
+    dialog_config_window_hide();
+  }
+  dialog_config_window_show(s_dialog_content[error].title, s_dialog_content[error].message,
+                            s_dialog_content[error].icon);
+  last_error = error;
+}
+
 static void prv_refresh_ui(void) {
   AppError error = prv_current_error();
   if (!error) {
@@ -48,12 +56,8 @@ static void prv_refresh_ui(void) {
     cards_window_update();
     return;
   }
-  if (error != s_last_error) {
-    dialog_config_window_hide();
-  }
-  dialog_config_window_show(s_dialog_content[error].title, s_dialog_content[error].message,
-                            s_dialog_content[error].icon);
-  s_last_error = error;
+
+  prv_show_error(error);
 }
 
 static void prv_pebble_app_connection_handler(bool connected) {
