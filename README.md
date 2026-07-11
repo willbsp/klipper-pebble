@@ -1,36 +1,39 @@
-# klipper-pebble
+# Klipper Monitor
 
-A Pebble watchapp/watchface written in C using the Pebble SDK.
+A Pebble watchapp for keeping an eye on your Klipper 3D printer, via
+[Moonraker](https://moonraker.readthedocs.io/).
 
-## Building & running
+<p>
+  <img src="screenshots/bed.png" width="200" alt="Bed temperature card" />
+  <img src="screenshots/nozzle.png" width="200" alt="Nozzle temperature card" />
+  <img src="screenshots/print.png" width="200" alt="Print progress card" />
+</p>
 
-```sh
-pebble build                          # build for all targetPlatforms
-pebble install --emulator emery       # install on the emery emulator
-pebble install --phone <ip>           # install to a paired phone
-```
+## Features
 
-## Target platforms
+- Bed and nozzle temperatures with targets and heating status
+- Print progress with estimated time remaining
+- Animated cards — flip between them with the up/down buttons
+- A progress bar along the top counts down to the next refresh
 
-`targetPlatforms` in `package.json` controls which watches you build for. The
-modern Pebble hardware is **emery** (Pebble Time 2), **gabbro** (Pebble Round
-2), and **flint** (Pebble 2 Duo); the original Pebble platforms (aplite,
-basalt, chalk, diorite) are included by default for backwards compatibility.
+## Setup
 
-## Project layout
+1. Build and install:
 
-```
-src/c/           C source for the watchapp
-src/pkjs/        PebbleKit JS (phone-side) source, if any
-worker_src/c/    Background worker source, if any
-resources/       Images, fonts, and other bundled resources
-package.json     Project metadata (UUID, platforms, resources, message keys)
-wscript          Build rules — usually no need to edit
-```
+   ```sh
+   pebble build
+   pebble install --emulator emery   # or --cloudpebble
+   ```
 
-By default this project is configured as a watchapp. To make it a watchface,
-set `pebble.watchapp.watchface` to `true` in `package.json`.
+2. Open the app's settings in the Pebble phone app and enter the printer Moonraker
+   URL, e.g. `http://192.168.1.100` or `http://printer.local`. Your phone
+   needs to be able to reach the printer on the network.
 
-## Documentation
+## How it works
 
-Full SDK docs, tutorials, and API reference: <https://developer.repebble.com>
+The phone-side JS polls Moonraker's `/printer/objects/query` endpoint every
+10 seconds and forwards temperatures, print state, and progress to the watch
+over AppMessage.
+
+Targets the Pebble Time 2 (emery). Built with the
+[Pebble SDK](https://developer.repebble.com).
