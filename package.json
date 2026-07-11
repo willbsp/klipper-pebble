@@ -43,9 +43,19 @@
           "menuIcon": true
         },
         {
-          "type": "bitmap",
+          "type": "raw",
           "name": "CONFIG_REQUIRED",
-          "file": "images/config-required.png"
+          "file": "images/config-required.pdc"
+        },
+        {
+          "type": "raw",
+          "name": "NO_INTERNET",
+          "file": "images/no-internet.pdc"
+        },
+        {
+          "type": "raw",
+          "name": "WATCH_DISCONNECT",
+          "file": "images/watch-disconnect.pdc"
         }
       ]
     }
