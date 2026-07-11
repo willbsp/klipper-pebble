@@ -2,6 +2,7 @@
 
 #include "drawing.h"
 #include "messaging.h"
+#include "persist_keys.h"
 #include <pebble.h>
 #include <stdio.h>
 
@@ -334,6 +335,7 @@ static void prv_window_unload(Window *window) {
   layer_destroy(s_canvas_layer);
   status_bar_layer_destroy(s_status_bar);
 
+  persist_write_int(PERSIST_KEY_CURRENT_CARD, s_current_card);
   window_destroy(window);
   s_window = NULL;
 }
@@ -348,6 +350,9 @@ void cards_window_update(void) {
 
 void cards_window_init() {
   s_window = window_create();
+  if (persist_exists(PERSIST_KEY_CURRENT_CARD)) {
+    s_current_card = persist_read_int(PERSIST_KEY_CURRENT_CARD);
+  }
   window_set_background_color(s_window, GColorBlack);
   window_set_click_config_provider(s_window, prv_click_config_provider);
   window_set_window_handlers(s_window, (WindowHandlers){

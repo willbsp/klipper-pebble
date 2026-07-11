@@ -72,7 +72,7 @@ static void prv_init(void) {
   cards_window_init();
   connection_service_subscribe(
       (ConnectionHandlers){.pebble_app_connection_handler = prv_pebble_app_connection_handler});
-  messaging_init(prv_refresh_ui);
+  messaging_init(prv_on_messaging_update_callback);
   prv_refresh_ui();
 }
 

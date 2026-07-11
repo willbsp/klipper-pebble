@@ -1,0 +1,4 @@
+#pragma once
+
+#define PERSIST_KEY_PRINTER_STATE 1
+#define PERSIST_KEY_CURRENT_CARD  2
