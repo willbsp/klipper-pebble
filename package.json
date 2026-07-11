@@ -31,7 +31,8 @@
       "PrintState",
       "PrintProgress",
       "PrintTimeLeft",
-      "RequestUpdate"
+      "RequestUpdate",
+      "ConnectionState"
     ],
     "resources": {
       "media": [

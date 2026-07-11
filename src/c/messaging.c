@@ -2,7 +2,6 @@
 
 #include "message_keys.auto.h"
 #include <pebble.h>
-#include <stdio.h>
 
 static const uint32_t s_inbox_size = 256;
 static const uint32_t s_outbox_size = 64;
@@ -10,7 +9,8 @@ static const uint32_t s_outbox_size = 64;
 static int s_nozzle_temp = 0, s_nozzle_target = 0;
 static int s_bed_temp = 0, s_bed_target = 0;
 static int s_print_progress = 0, s_print_time_left = 0;
-static char s_print_state[32] = "standby";
+static ConnectionState s_connection_state;
+static PrintState s_print_state;
 
 static MessagingUpdateCallback s_on_update = NULL;
 
@@ -32,7 +32,10 @@ int messaging_get_print_progress(void) {
 int messaging_get_print_time_left(void) {
   return s_print_time_left;
 }
-const char *messaging_get_print_state(void) {
+ConnectionState messaging_get_connection_state(void) {
+  return s_connection_state;
+}
+PrintState messaging_get_print_state(void) {
   return s_print_state;
 }
 
@@ -69,9 +72,14 @@ static void prv_inbox_received_callback(DictionaryIterator *iter, void *context)
     s_print_time_left = t->value->int32;
   }
 
+  t = dict_find(iter, MESSAGE_KEY_ConnectionState);
+  if (t) {
+    s_connection_state = t->value->int32;
+  }
+
   t = dict_find(iter, MESSAGE_KEY_PrintState);
   if (t) {
-    snprintf(s_print_state, sizeof(s_print_state), "%s", t->value->cstring);
+    s_print_state = t->value->int32;
   }
 
   if (s_on_update) {

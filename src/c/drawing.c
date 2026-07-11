@@ -1,3 +1,4 @@
+#include "messaging.h"
 #include <pebble.h>
 
 void drawing_draw_bed(GContext *ctx, GRect bounds, int anim_frame, int target_temp) {
@@ -91,7 +92,7 @@ void drawing_draw_nozzle(GContext *ctx, GRect bounds, int anim_frame, int target
 }
 
 void drawing_draw_print(GContext *ctx, GRect bounds, int anim_frame, int progress,
-                        const char *state) {
+                        PrintState state) {
 
   int cx = bounds.size.w / 2;
   int cy = bounds.size.h / 2;
@@ -108,7 +109,7 @@ void drawing_draw_print(GContext *ctx, GRect bounds, int anim_frame, int progres
   // Printed object
   int max_h = 30;
   int obj_h = (max_h * progress) / 100;
-  if (obj_h < 2 && strcmp(state, "printing") == 0) {
+  if (obj_h < 2 && state == PRINT_PRINTING) {
     obj_h = 2;
   }
   if (obj_h > 0) {
@@ -117,7 +118,7 @@ void drawing_draw_print(GContext *ctx, GRect bounds, int anim_frame, int progres
   }
 
   // Moving nozzle
-  if (strcmp(state, "printing") == 0) {
+  if (state == PRINT_PRINTING) {
     int sweep = 30;
     int phase = anim_frame % 20;
     int nozzle_x;
@@ -139,13 +140,13 @@ void drawing_draw_print(GContext *ctx, GRect bounds, int anim_frame, int progres
 
   // Status dot
   GColor status_color;
-  if (strcmp(state, "printing") == 0) {
+  if (state == PRINT_PRINTING) {
     status_color = (anim_frame % 8 < 5) ? GColorGreen : GColorIslamicGreen;
-  } else if (strcmp(state, "complete") == 0) {
+  } else if (state == PRINT_COMPLETE) {
     status_color = GColorGreen;
-  } else if (strcmp(state, "error") == 0) {
+  } else if (state == PRINT_ERROR) {
     status_color = GColorRed;
-  } else if (strcmp(state, "paused") == 0) {
+  } else if (state == PRINT_PAUSED) {
     status_color = GColorChromeYellow;
   } else {
     status_color = GColorDarkGray;

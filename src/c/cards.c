@@ -110,7 +110,7 @@ static void prv_set_heater_content(const char *label_text, int temp, int target)
 }
 
 static void prv_update_card_text(void) {
-  const char *print_state = messaging_get_print_state();
+  const PrintState print_state = messaging_get_print_state();
 
   switch (s_current_card) {
   case CARD_BED:
@@ -123,17 +123,17 @@ static void prv_update_card_text(void) {
     break;
   case CARD_PRINT:
     snprintf(s_label_buf, sizeof(s_label_buf), LABEL_TEXT_PRINT);
-    if (strcmp(print_state, "printing") == 0) {
+    if (print_state == PRINT_PRINTING) {
       snprintf(s_value_buf, sizeof(s_value_buf), "%d%%", messaging_get_print_progress());
       prv_format_time_remaining(messaging_get_print_time_left(), s_subtext_buf,
                                 sizeof(s_subtext_buf));
-    } else if (strcmp(print_state, "complete") == 0) {
+    } else if (print_state == PRINT_COMPLETE) {
       snprintf(s_value_buf, sizeof(s_value_buf), VALUE_TEXT_DONE);
       snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_COMPLETE);
-    } else if (strcmp(print_state, "paused") == 0) {
+    } else if (print_state == PRINT_PAUSED) {
       snprintf(s_value_buf, sizeof(s_value_buf), "%d%%", messaging_get_print_progress());
       snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_PAUSED);
-    } else if (strcmp(print_state, "error") == 0) {
+    } else if (print_state == PRINT_ERROR) {
       snprintf(s_value_buf, sizeof(s_value_buf), VALUE_TEXT_ERROR);
       snprintf(s_subtext_buf, sizeof(s_subtext_buf), SUBTEXT_TEXT_ERROR);
     } else {

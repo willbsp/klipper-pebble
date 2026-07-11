@@ -2,7 +2,23 @@ var Clay = require('@rebble/clay');
 var clayConfig = require('./config');
 new Clay(clayConfig);
 
-const POLL_INTERVAL_MS = 10000;
+const POLL_INTERVAL_MS = 1000;
+const REQUEST_TIMEOUT_MS = 5000;
+
+const CONN_OK = 1;
+const CONN_ERROR = 2;
+const CONN_UNREACHABLE = 3;
+const CONN_NOT_CONFIGURED = 4;
+
+var PRINT_UNKNOWN = 0;
+var PRINT_STATE_MAP = {
+  standby: 1,
+  printing: 2,
+  paused: 3,
+  complete: 4,
+  cancelled: 5,
+  error: 6,
+};
 
 var pollTimer = null;
 
@@ -20,8 +36,15 @@ function getMoonrakerUrl() {
 }
 
 function fetchPrinterStatus() {
+  var base = getMoonrakerUrl();
+  if (!base) {
+    sendToWatch({ ConnectionState: CONN_NOT_CONFIGURED });
+    stopPolling();
+    return;
+  }
+
   var url =
-    getMoonrakerUrl() +
+    base +
     '/printer/objects/query' +
     '?extruder=temperature,target' +
     '&heater_bed=temperature,target' +
@@ -29,59 +52,72 @@ function fetchPrinterStatus() {
     '&virtual_sdcard=progress';
 
   var req = new XMLHttpRequest();
+
   req.onload = function () {
+    if (this.status !== 200) {
+      sendToWatch({ ConnectionState: CONN_ERROR });
+      return;
+    }
     try {
-      var json = JSON.parse(this.responseText);
-      var status = json.result.status;
+      var status = JSON.parse(this.responseText).result.status;
 
-      var nozzleTemp = Math.round(status.extruder.temperature);
-      var nozzleTarget = Math.round(status.extruder.target);
-      var bedTemp = Math.round(status.heater_bed.temperature);
-      var bedTarget = Math.round(status.heater_bed.target);
-
-      var printState = status.print_stats.state || 'unknown';
       var progress = Math.round(status.virtual_sdcard.progress * 100);
-
-      // Estimate time remaining from progress and elapsed duration
+      var printState = toPrintState(status.print_stats.state);
       var printDuration = status.print_stats.print_duration || 0;
+
       var timeLeft = 0;
-      if (progress > 0 && printState === 'printing') {
-        var totalEstimate = printDuration / (progress / 100);
-        timeLeft = Math.round(totalEstimate - printDuration);
+      if (progress > 0 && printState === PRINT_STATE_MAP.printing) {
+        timeLeft = Math.round(printDuration / (progress / 100) - printDuration);
       }
 
       var dict = {
-        NozzleTemp: nozzleTemp,
-        NozzleTarget: nozzleTarget,
-        BedTemp: bedTemp,
-        BedTarget: bedTarget,
+        NozzleTemp: Math.round(status.extruder.temperature),
+        NozzleTarget: Math.round(status.extruder.target),
+        BedTemp: Math.round(status.heater_bed.temperature),
+        BedTarget: Math.round(status.heater_bed.target),
         PrintState: printState,
         PrintProgress: progress,
         PrintTimeLeft: timeLeft,
+        ConnectionState: CONN_OK,
       };
 
-      Pebble.sendAppMessage(
-        dict,
-        function () {
-          console.log('Data sent to watch');
-        },
-        function (e) {
-          console.log('Send failed: ' + JSON.stringify(e));
-        }
-      );
+      sendToWatch(dict);
     } catch (err) {
       console.log('Error parsing Moonraker response: ' + err.message);
+      console.log(err.stack);
+      sendToWatch({ ConnectionState: CONN_ERROR });
     }
   };
 
-  req.onerror = function () {
-    console.log('XHR error - is Moonraker reachable?');
-    // Send an error state so the watch knows
-    Pebble.sendAppMessage({ PrintState: 'error' });
-  };
+  function unreachable() {
+    console.log('Moonraker is unreachable');
+    stopPolling();
+    sendToWatch({ ConnectionState: CONN_UNREACHABLE });
+  }
+
+  req.onerror = unreachable;
+  req.ontimeout = unreachable;
 
   req.open('GET', url);
+  req.timeout = REQUEST_TIMEOUT_MS;
   req.send();
+}
+
+function sendToWatch(dict) {
+  Pebble.sendAppMessage(
+    dict,
+    function () {
+      console.log('Sent: ' + JSON.stringify(dict));
+    },
+    function (e) {
+      console.log('Send failed: ' + JSON.stringify(e));
+    }
+  );
+}
+
+function toPrintState(state) {
+  var s = PRINT_STATE_MAP[state];
+  return s === undefined ? PRINT_UNKNOWN : s;
 }
 
 function startPolling() {
